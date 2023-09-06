@@ -1,0 +1,55 @@
+﻿$uri1='https://ddsharedstorage.blob.core.windows.net/configurations/filepolnew1.zip?sp=r&st=2023-09-06T08:37:24Z&se=2024-09-06T16:37:24Z&spr=https&sv=2022-11-02&sr=b&sig=SiZ%2B2NcjXWsPT0Uf2EhwFNrsDlrAo304K%2F5pdwd2x0s%3D'
+$uri2='https://ddsharedstorage.blob.core.windows.net/configurations/filepolnew2.zip?sp=r&st=2023-09-06T08:38:13Z&se=2024-09-06T16:38:13Z&spr=https&sv=2022-11-02&sr=b&sig=0GmT19%2BIWXMuTy5sGEIZV5jwXRni4DATJTJUItA5ank%3D'
+$uri3='https://ddsharedstorage.blob.core.windows.net/configurations/filepolnew3.zip?sp=r&st=2023-09-06T08:38:41Z&se=2024-09-06T16:38:41Z&spr=https&sv=2022-11-02&sr=b&sig=beSAkglxctDdYP9ZX2HQzIe9UUJQF5lGqLz9%2BqYeJYY%3D'
+
+
+
+$filepolnew1      = @{
+  PolicyId      = $(new-guid).guid
+  ContentUri    = $uri1
+  DisplayName   = 'filepolnew1'
+  Description   = 'filepolnew1'
+  Path          = './filepolnew1'
+  Platform      = 'Linux'
+  PolicyVersion = '1.0.0'
+  Mode          = 'ApplyAndAutoCorrect'
+}
+$tags=@{
+"setfile1" = "yes"
+}
+New-GuestConfigurationPolicy @filepolnew1 -Tag $tags 
+$filepolnew2      = @{
+  PolicyId      = $(new-guid).guid
+  ContentUri    = $uri2
+  DisplayName   = 'filepolnew2'
+  Description   = 'filepolnew2'
+  Path          = './filepolnew2/'
+  Platform      = 'Linux'
+  PolicyVersion = '1.0.0'
+  Mode          = 'ApplyAndAutoCorrect'
+}
+$tags=@{
+"setfile2" = "yes"
+}
+New-GuestConfigurationPolicy @filepolnew2 -Tag $tags
+$filepolnew3      = @{
+  PolicyId      = $(new-guid).guid
+  ContentUri    = $uri3
+  DisplayName   = 'filepolnew3'
+  Description   = 'filepolnew3'
+  Path          = './filepolnew3/'
+  Platform      = 'Linux'
+  PolicyVersion = '1.0.0'
+  Mode          = 'ApplyAndAutoCorrect'
+}
+
+$tags=@{
+"setfile3" = "yes"
+}
+
+New-GuestConfigurationPolicy @filepolnew3 -Tag $tags
+
+
+New-AzPolicyDefinition -Name 'filepolnew1' -Policy C:\dscdemo\packages\filepolnew1\filepolnew1_DeployIfNotExists.json
+New-AzPolicyDefinition -Name 'filepolnew2' -Policy C:\dscdemo\packages\filepolnew2\filepolnew2_DeployIfNotExists.json
+New-AzPolicyDefinition -Name 'filepolnew3' -Policy C:\dscdemo\packages\filepolnew3\filepolnew3_DeployIfNotExists.json
