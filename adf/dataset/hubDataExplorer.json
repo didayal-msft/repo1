@@ -1,0 +1,30 @@
+{
+	"name": "hubDataExplorer",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "hubDataExplorer",
+			"type": "LinkedServiceReference",
+			"parameters": {
+				"database": "@dataset().database"
+			}
+		},
+		"parameters": {
+			"database": {
+				"type": "String",
+				"defaultValue": null
+			},
+			"table": {
+				"type": "String"
+			}
+		},
+		"annotations": [],
+		"type": "AzureDataExplorerTable",
+		"typeProperties": {
+			"table": {
+				"value": "@dataset().table",
+				"type": "Expression"
+			}
+		}
+	},
+	"type": "Microsoft.DataFactory/factories/datasets"
+}

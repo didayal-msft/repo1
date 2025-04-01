@@ -1,0 +1,31 @@
+{
+	"name": "ManagedIntegrationRuntime",
+	"properties": {
+		"type": "Managed",
+		"typeProperties": {
+			"computeProperties": {
+				"location": "Central India",
+				"dataFlowProperties": {
+					"computeType": "General",
+					"coreCount": 8,
+					"timeToLive": 10,
+					"cleanup": false,
+					"customProperties": []
+				},
+				"copyComputeScaleProperties": {
+					"dataIntegrationUnit": 16,
+					"timeToLive": 30
+				},
+				"pipelineExternalComputeScaleProperties": {
+					"timeToLive": 30,
+					"numberOfPipelineNodes": 1,
+					"numberOfExternalNodes": 1
+				}
+			}
+		},
+		"managedVirtualNetwork": {
+			"type": "ManagedVirtualNetworkReference",
+			"referenceName": "default"
+		}
+	}
+}

@@ -1,0 +1,27 @@
+{
+	"name": "config_DailySchedule",
+	"properties": {
+		"annotations": [],
+		"runtimeState": "Started",
+		"pipelines": [
+			{
+				"pipelineReference": {
+					"referenceName": "config_StartExportProcess",
+					"type": "PipelineReference"
+				},
+				"parameters": {
+					"Recurrence": "Daily"
+				}
+			}
+		],
+		"type": "ScheduleTrigger",
+		"typeProperties": {
+			"recurrence": {
+				"frequency": "Hour",
+				"interval": 24,
+				"startTime": "2023-01-01T01:01:00",
+				"timeZone": "India Standard Time"
+			}
+		}
+	}
+}

@@ -1,0 +1,326 @@
+{
+	"name": "msexports_ExecuteETL",
+	"properties": {
+		"activities": [
+			{
+				"name": "Wait",
+				"description": "Files may not be available immediately after being created.",
+				"type": "Wait",
+				"dependsOn": [],
+				"userProperties": [],
+				"typeProperties": {
+					"waitTimeInSeconds": 60
+				}
+			},
+			{
+				"name": "Read Manifest",
+				"description": "Load the export manifest to determine the scope, dataset, and date range.",
+				"type": "Lookup",
+				"dependsOn": [
+					{
+						"activity": "Wait",
+						"dependencyConditions": [
+							"Completed"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "JsonSource",
+						"storeSettings": {
+							"type": "AzureBlobFSReadSettings",
+							"recursive": true,
+							"enablePartitionDiscovery": false
+						},
+						"formatSettings": {
+							"type": "JsonReadSettings"
+						}
+					},
+					"dataset": {
+						"referenceName": "manifest",
+						"type": "DatasetReference",
+						"parameters": {
+							"fileName": {
+								"value": "@pipeline().parameters.fileName",
+								"type": "Expression"
+							},
+							"folderPath": {
+								"value": "@pipeline().parameters.folderPath",
+								"type": "Expression"
+							}
+						}
+					}
+				}
+			},
+			{
+				"name": "Set Has No Rows",
+				"description": "Check the row count",
+				"type": "SetVariable",
+				"dependsOn": [
+					{
+						"activity": "Read Manifest",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "hasNoRows",
+					"value": {
+						"value": "@or(equals(activity('Read Manifest').output.firstRow.blobCount, null), equals(activity('Read Manifest').output.firstRow.blobCount, 0))",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "Set Export Dataset Type",
+				"description": "Save the dataset type from the export manifest.",
+				"type": "SetVariable",
+				"dependsOn": [
+					{
+						"activity": "Read Manifest",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "exportDatasetType",
+					"value": {
+						"value": "@activity('Read Manifest').output.firstRow.exportConfig.type",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "Set MCA Column",
+				"description": "Determines if the dataset schema has channel-specific columns and saves the column name that only exists in MCA to determine if it is an MCA dataset.",
+				"type": "SetVariable",
+				"dependsOn": [
+					{
+						"activity": "Set Export Dataset Type",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "mcaColumnToCheck",
+					"value": {
+						"value": "@if(contains(createArray('pricesheet', 'reservationtransactions'), toLower(variables('exportDatasetType'))), 'BillingProfileId', if(equals(toLower(variables('exportDatasetType')), 'reservationrecommendations'), 'Net Savings', null))",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "Set Export Dataset Version",
+				"description": "Save the dataset version from the export manifest.",
+				"type": "SetVariable",
+				"dependsOn": [
+					{
+						"activity": "Read Manifest",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "exportDatasetVersion",
+					"value": {
+						"value": "@activity('Read Manifest').output.firstRow.exportConfig.dataVersion",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "Detect Channel",
+				"description": "Determines what channel this export is from.",
+				"type": "Switch",
+				"dependsOn": [
+					{
+						"activity": "Set Has No Rows",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					},
+					{
+						"activity": "Set MCA Column",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					},
+					{
+						"activity": "Set Export Dataset Version",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"on": {
+						"value": "@if(or(empty(variables('mcaColumnToCheck')), variables('hasNoRows')), 'ignore', last(array(split(activity('Read Manifest').output.firstRow.blobs[0].blobName, '.'))))",
+						"type": "Expression"
+					},
+					"cases": [
+						{
+							"value": "csv",
+							"activities": [
+								{
+									"name": "Check for MCA Column in CSV",
+									"description": "Checks the dataset to determine if the applicable MCA-specific column exists.",
+									"type": "Lookup",
+									"dependsOn": [],
+									"policy": {
+										"timeout": "0.12:00:00",
+										"retry": 0,
+										"retryIntervalInSeconds": 30,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"source": {
+											"type": "DelimitedTextSource",
+											"storeSettings": {
+												"type": "AzureBlobFSReadSettings",
+												"recursive": false,
+												"enablePartitionDiscovery": false
+											},
+											"formatSettings": {
+												"type": "DelimitedTextReadSettings"
+											}
+										},
+										"dataset": {
+											"referenceName": "msexports",
+											"type": "DatasetReference",
+											"parameters": {
+												"blobPath": {
+													"value": "@activity('Read Manifest').output.firstRow.blobs[0].blobName",
+													"type": "Expression"
+												}
+											}
+										}
+									}
+								},
+								{
+									"name": "Set Schema File with Channel in CSV",
+									"type": "SetVariable",
+									"dependsOn": [
+										{
+											"activity": "Check for MCA Column in CSV",
+											"dependencyConditions": [
+												"Succeeded"
+											]
+										}
+									],
+									"policy": {
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"variableName": "schemaFile",
+										"value": {
+											"value": "@toLower(concat(variables('exportDatasetType'), '_', variables('exportDatasetVersion'), if(and(contains(activity('Check for MCA Column in CSV').output, 'firstRow'), contains(activity('Check for MCA Column in CSV').output.firstRow, variables('mcaColumnToCheck'))), '_mca', '_ea'), '.json'))",
+											"type": "Expression"
+										}
+									}
+								}
+							]
+						}
+					],
+					"defaultActivities": [
+						{
+							"name": "Set Schema File",
+							"type": "SetVariable",
+							"dependsOn": [],
+							"policy": {
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"variableName": "schemaFile",
+								"value": {
+									"value": "@toLower(concat(variables('exportDatasetType'), '_', variables('exportDatasetVersion'), '.json'))",
+									"type": "Expression"
+								}
+							}
+						}
+					]
+				}
+			}
+		],
+		"parameters": {
+			"fileName": {
+				"type": "string"
+			},
+			"folderPath": {
+				"type": "string"
+			}
+		},
+		"variables": {
+			"date": {
+				"type": "String"
+			},
+			"destinationFolder": {
+				"type": "String"
+			},
+			"exportDatasetType": {
+				"type": "String"
+			},
+			"exportDatasetVersion": {
+				"type": "String"
+			},
+			"hasNoRows": {
+				"type": "Boolean"
+			},
+			"hubDataset": {
+				"type": "String"
+			},
+			"mcaColumnToCheck": {
+				"type": "String"
+			},
+			"schemaFile": {
+				"type": "String"
+			},
+			"scope": {
+				"type": "String"
+			}
+		},
+		"annotations": [
+			"New export"
+		],
+		"lastPublishTime": "2025-03-31T12:39:36Z"
+	},
+	"type": "Microsoft.DataFactory/factories/pipelines"
+}

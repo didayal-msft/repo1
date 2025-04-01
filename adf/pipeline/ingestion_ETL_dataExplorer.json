@@ -1,0 +1,259 @@
+{
+	"name": "ingestion_ETL_dataExplorer",
+	"properties": {
+		"activities": [
+			{
+				"name": "Read Hub Config",
+				"description": "Read the hub config to determine how long data should be retained.",
+				"type": "Lookup",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "JsonSource",
+						"storeSettings": {
+							"type": "AzureBlobFSReadSettings",
+							"recursive": false,
+							"enablePartitionDiscovery": false
+						},
+						"formatSettings": {
+							"type": "JsonReadSettings"
+						}
+					},
+					"dataset": {
+						"referenceName": "config",
+						"type": "DatasetReference",
+						"parameters": {
+							"fileName": "settings.json",
+							"folderPath": "config"
+						}
+					}
+				}
+			},
+			{
+				"name": "Set Final Retention Months",
+				"type": "SetVariable",
+				"dependsOn": [
+					{
+						"activity": "Read Hub Config",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "finalRetentionMonths",
+					"value": {
+						"value": "@coalesce(activity('Read Hub Config').output.firstRow.retention.final.months, 999)",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "Until Capacity Is Available",
+				"type": "Until",
+				"dependsOn": [
+					{
+						"activity": "Set Final Retention Months",
+						"dependencyConditions": [
+							"Completed",
+							"Skipped"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@equals(variables('tryAgain'), false)",
+						"type": "Expression"
+					},
+					"activities": [
+						{
+							"name": "Confirm Ingestion Capacity",
+							"type": "AzureDataExplorerCommand",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"command": ".show capacity | where Resource == 'Ingestions' | project Remaining",
+								"commandTimeout": "00:20:00"
+							},
+							"linkedServiceName": {
+								"referenceName": "hubDataExplorer",
+								"type": "LinkedServiceReference"
+							}
+						},
+						{
+							"name": "If Has Capacity",
+							"type": "IfCondition",
+							"dependsOn": [
+								{
+									"activity": "Confirm Ingestion Capacity",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"userProperties": [],
+							"typeProperties": {
+								"expression": {
+									"value": "@or(equals(activity('Confirm Ingestion Capacity').output.count, 0), greater(activity('Confirm Ingestion Capacity').output.value[0].Remaining, 0))",
+									"type": "Expression"
+								},
+								"ifFalseActivities": [
+									{
+										"name": "Wait for Ingestion",
+										"type": "Wait",
+										"dependsOn": [],
+										"userProperties": [],
+										"typeProperties": {
+											"waitTimeInSeconds": 15
+										}
+									},
+									{
+										"name": "Try Again",
+										"type": "SetVariable",
+										"dependsOn": [
+											{
+												"activity": "Wait for Ingestion",
+												"dependencyConditions": [
+													"Succeeded"
+												]
+											}
+										],
+										"policy": {
+											"secureOutput": false,
+											"secureInput": false
+										},
+										"userProperties": [],
+										"typeProperties": {
+											"variableName": "tryAgain",
+											"value": true
+										}
+									}
+								],
+								"ifTrueActivities": [
+									{
+										"name": "Pre-Ingest Cleanup",
+										"description": "Remove previous ingestions into the raw table for the month and any previous runs of the current ingestion month file in any table.",
+										"type": "AzureDataExplorerCommand",
+										"dependsOn": [],
+										"policy": {
+											"timeout": "0.12:00:00",
+											"retry": 0,
+											"retryIntervalInSeconds": 30,
+											"secureOutput": false,
+											"secureInput": false
+										},
+										"userProperties": [],
+										"typeProperties": {
+											"command": {
+												"value": "@concat('.drop extents <| .show extents | where (TableName == \"', pipeline().parameters.table, '\" and Tags !has \"drop-by:', pipeline().parameters.ingestionId, '\" and Tags has \"drop-by:', pipeline().parameters.folderPath, '\") or (Tags has \"drop-by:', pipeline().parameters.ingestionId, '\" and Tags has \"drop-by:', pipeline().parameters.folderPath, '/', pipeline().parameters.originalFileName, '\")')",
+												"type": "Expression"
+											},
+											"commandTimeout": "00:20:00"
+										},
+										"linkedServiceName": {
+											"referenceName": "hubDataExplorer",
+											"type": "LinkedServiceReference",
+											"parameters": {
+												"database": null
+											}
+										}
+									},
+									{
+										"name": "Ingest Data",
+										"type": "AzureDataExplorerCommand",
+										"dependsOn": [
+											{
+												"activity": "Pre-Ingest Cleanup",
+												"dependencyConditions": [
+													"Succeeded"
+												]
+											}
+										],
+										"policy": {
+											"timeout": "0.12:00:00",
+											"retry": 3,
+											"retryIntervalInSeconds": 120,
+											"secureOutput": false,
+											"secureInput": false
+										},
+										"userProperties": [],
+										"typeProperties": {
+											"command": {
+												"value": "TODO",
+												"type": "Expression"
+											},
+											"commandTimeout": "01:00:00"
+										},
+										"linkedServiceName": {
+											"referenceName": "hubDataExplorer",
+											"type": "LinkedServiceReference",
+											"parameters": {
+												"database": null
+											}
+										}
+									}
+								]
+							}
+						}
+					]
+				},
+				"timeout": "0.02:00:00"
+			}
+		],
+		"parameters": {
+			"fileName": {
+				"type": "string"
+			},
+			"folderPath": {
+				"type": "string"
+			},
+			"ingestionId": {
+				"type": "string"
+			},
+			"originalFileName": {
+				"type": "string"
+			},
+			"table": {
+				"type": "string"
+			}
+		},
+		"variables": {
+			"finalRetentionMonths": {
+				"type": "Integer",
+				"defaultValue": 999
+			},
+			"logRetentionDays": {
+				"type": "Integer",
+				"defaultValue": 0
+			},
+			"tryAgain": {
+				"type": "Boolean",
+				"defaultValue": true
+			}
+		},
+		"annotations": [],
+		"lastPublishTime": "2025-03-31T12:39:38Z"
+	},
+	"type": "Microsoft.DataFactory/factories/pipelines"
+}

@@ -1,0 +1,241 @@
+{
+	"name": "config_StartExportProcess",
+	"properties": {
+		"activities": [
+			{
+				"name": "Get Config",
+				"type": "Lookup",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "0.00:05:00",
+					"retry": 2,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "JsonSource",
+						"storeSettings": {
+							"type": "AzureBlobFSReadSettings",
+							"recursive": true,
+							"enablePartitionDiscovery": false
+						},
+						"formatSettings": {
+							"type": "JsonReadSettings"
+						}
+					},
+					"dataset": {
+						"referenceName": "config",
+						"type": "DatasetReference",
+						"parameters": {
+							"fileName": {
+								"value": "@variables('fileName')",
+								"type": "Expression"
+							},
+							"folderPath": {
+								"value": "@variables('folderPath')",
+								"type": "Expression"
+							}
+						}
+					}
+				}
+			},
+			{
+				"name": "Set Scopes",
+				"description": "Save scopes to test if it is an array",
+				"type": "SetVariable",
+				"dependsOn": [
+					{
+						"activity": "Get Config",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "scopesArray",
+					"value": {
+						"value": "@activity('Get Config').output.firstRow.scopes",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "Set Scopes as Array",
+				"description": "Wraps a single scope object into an array",
+				"type": "SetVariable",
+				"dependsOn": [
+					{
+						"activity": "Set Scopes",
+						"dependencyConditions": [
+							"Failed"
+						]
+					}
+				],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "scopesArray",
+					"value": {
+						"value": "@createArray(activity('Get Config').output.firstRow.scopes)",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "Filter Invalid Scopes",
+				"description": "Remove any invalid scopes to avoid errors.",
+				"type": "Filter",
+				"dependsOn": [
+					{
+						"activity": "Set Scopes",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					},
+					{
+						"activity": "Set Scopes as Array",
+						"dependencyConditions": [
+							"Succeeded",
+							"Skipped"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@variables('scopesArray')",
+						"type": "Expression"
+					},
+					"condition": {
+						"value": "@and(not(empty(item().scope)), not(equals(item().scope, '/')))",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "ForEach Export Scope",
+				"type": "ForEach",
+				"dependsOn": [
+					{
+						"activity": "Filter Invalid Scopes",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@activity('Filter Invalid Scopes').output.Value",
+						"type": "Expression"
+					},
+					"isSequential": true,
+					"activities": [
+						{
+							"name": "Get exports for scope",
+							"type": "WebActivity",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "0.00:05:00",
+								"retry": 2,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"method": "GET",
+								"url": {
+									"value": "@{variables('resourceManagementUri')}@{item().scope}/providers/Microsoft.CostManagement/exports?api-version=2023-07-01-preview",
+									"type": "Expression"
+								},
+								"authentication": {
+									"type": "MSI",
+									"resource": {
+										"value": "@variables('resourceManagementUri')",
+										"type": "Expression"
+									}
+								}
+							}
+						},
+						{
+							"name": "Run exports for scope",
+							"type": "ExecutePipeline",
+							"dependsOn": [
+								{
+									"activity": "Get exports for scope",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"pipeline": {
+									"referenceName": "config_RunExportJobs",
+									"type": "PipelineReference"
+								},
+								"waitOnCompletion": true,
+								"parameters": {
+									"ExportScopes": {
+										"value": "@activity('Get exports for scope').output.value",
+										"type": "Expression"
+									},
+									"Recurrence": {
+										"value": "@pipeline().parameters.Recurrence",
+										"type": "Expression"
+									}
+								}
+							}
+						}
+					]
+				}
+			}
+		],
+		"concurrency": 1,
+		"parameters": {
+			"Recurrence": {
+				"type": "string",
+				"defaultValue": "Daily"
+			}
+		},
+		"variables": {
+			"fileName": {
+				"type": "String",
+				"defaultValue": "settings.json"
+			},
+			"finOpsHub": {
+				"type": "String",
+				"defaultValue": "tfhubv08"
+			},
+			"folderPath": {
+				"type": "String",
+				"defaultValue": "config"
+			},
+			"resourceManagementUri": {
+				"type": "String",
+				"defaultValue": "https://management.azure.com/"
+			},
+			"scopesArray": {
+				"type": "Array"
+			}
+		},
+		"annotations": [],
+		"lastPublishTime": "2025-03-31T12:39:37Z"
+	},
+	"type": "Microsoft.DataFactory/factories/pipelines"
+}

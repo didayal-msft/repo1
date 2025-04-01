@@ -1,0 +1,24 @@
+{
+	"name": "hubDataExplorer",
+	"type": "Microsoft.DataFactory/factories/linkedservices",
+	"properties": {
+		"connectVia": {
+			"referenceName": "ManagedIntegrationRuntime",
+			"type": "IntegrationRuntimeReference"
+		},
+		"parameters": {
+			"database": {
+				"defaultValue": null,
+				"type": "String"
+			}
+		},
+		"type": "AzureDataExplorer",
+		"typeProperties": {
+			"database": "@{linkedService().database}",
+			"endpoint": null,
+			"servicePrincipalId": "774918c4-1212-4b28-a7c1-12a6697fffe1",
+			"tenant": "4ef5c800-a1de-451a-9bf2-017f7723e576"
+		},
+		"annotations": []
+	}
+}

@@ -1,0 +1,22 @@
+{
+	"name": "ftkRepo",
+	"type": "Microsoft.DataFactory/factories/linkedservices",
+	"properties": {
+		"annotations": [],
+		"connectVia": {
+			"referenceName": "ManagedIntegrationRuntime",
+			"type": "IntegrationRuntimeReference"
+		},
+		"parameters": {
+			"filePath": {
+				"type": "string"
+			}
+		},
+		"type": "HttpServer",
+		"typeProperties": {
+			"authenticationType": "Anonymous",
+			"enableServerCertificateValidation": true,
+			"url": "@{concat('https://github.com/microsoft/finops-toolkit/', linkedService().filePath)}"
+		}
+	}
+}

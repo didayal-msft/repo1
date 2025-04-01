@@ -1,0 +1,250 @@
+{
+	"name": "config_RunBackfillJob",
+	"properties": {
+		"activities": [
+			{
+				"name": "Get Config",
+				"type": "Lookup",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "0.00:05:00",
+					"retry": 2,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "JsonSource",
+						"storeSettings": {
+							"type": "AzureBlobFSReadSettings",
+							"recursive": true,
+							"enablePartitionDiscovery": false
+						},
+						"formatSettings": {
+							"type": "JsonReadSettings"
+						}
+					},
+					"dataset": {
+						"referenceName": "config",
+						"type": "DatasetReference",
+						"parameters": {
+							"fileName": {
+								"value": "@variables('fileName')",
+								"type": "Expression"
+							},
+							"folderPath": {
+								"value": "@variables('folderPath')",
+								"type": "Expression"
+							}
+						}
+					}
+				}
+			},
+			{
+				"name": "Set Scopes",
+				"description": "Save scopes to test if it is an array",
+				"type": "SetVariable",
+				"dependsOn": [
+					{
+						"activity": "Get Config",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "scopesArray",
+					"value": {
+						"value": "@activity('Get Config').output.firstRow.scopes",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "Set Scopes as Array",
+				"description": "Wraps a single scope object into an array",
+				"type": "SetVariable",
+				"dependsOn": [
+					{
+						"activity": "Set Scopes",
+						"dependencyConditions": [
+							"Failed"
+						]
+					}
+				],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "scopesArray",
+					"value": {
+						"value": "@createArray(activity('Get Config').output.firstRow.scopes)",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "Filter Invalid Scopes",
+				"description": "Remove any invalid scopes to avoid errors.",
+				"type": "Filter",
+				"dependsOn": [
+					{
+						"activity": "Set Scopes",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					},
+					{
+						"activity": "Set Scopes as Array",
+						"dependencyConditions": [
+							"Skipped",
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@variables('scopesArray')",
+						"type": "Expression"
+					},
+					"condition": {
+						"value": "@and(not(empty(item().scope)), not(equals(item().scope, '/')))",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "ForEach Export Scope",
+				"type": "ForEach",
+				"dependsOn": [
+					{
+						"activity": "Filter Invalid Scopes",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@activity('Filter Invalid Scopes').output.Value",
+						"type": "Expression"
+					},
+					"isSequential": true,
+					"activities": [
+						{
+							"name": "Set backfill export name",
+							"type": "SetVariable",
+							"dependsOn": [],
+							"policy": {
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"variableName": "exportName",
+								"value": {
+									"value": "@toLower(concat(variables('finOpsHub'), '-monthly-costdetails'))",
+									"type": "Expression"
+								}
+							}
+						},
+						{
+							"name": "Trigger backfill export",
+							"type": "WebActivity",
+							"dependsOn": [
+								{
+									"activity": "Set backfill export name",
+									"dependencyConditions": [
+										"Completed"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.00:05:00",
+								"retry": 1,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"method": "POST",
+								"headers": {
+									"ClientType": "FinOpsToolkit.Hubs@latest",
+									"Content-Type": "application/json",
+									"x-ms-command-name": "FinOpsToolkit.Hubs.config_RunBackfill@latest"
+								},
+								"url": {
+									"value": "TODO",
+									"type": "Expression"
+								},
+								"body": {
+									"value": "{\"timePeriod\" : { \"from\" : \"@{pipeline().parameters.StartDate}\", \"to\" : \"@{pipeline().parameters.EndDate}\" }}",
+									"type": "Expression"
+								},
+								"authentication": {
+									"type": "MSI",
+									"resource": {
+										"value": "@variables('resourceManagementUri')",
+										"type": "Expression"
+									}
+								}
+							}
+						}
+					]
+				}
+			}
+		],
+		"concurrency": 1,
+		"parameters": {
+			"EndDate": {
+				"type": "string"
+			},
+			"StartDate": {
+				"type": "string"
+			}
+		},
+		"variables": {
+			"exportName": {
+				"type": "String"
+			},
+			"fileName": {
+				"type": "String",
+				"defaultValue": "settings.json"
+			},
+			"finOpsHub": {
+				"type": "String",
+				"defaultValue": "tfhubv08"
+			},
+			"folderPath": {
+				"type": "String",
+				"defaultValue": "config"
+			},
+			"resourceManagementUri": {
+				"type": "String",
+				"defaultValue": "https://management.azure.com/"
+			},
+			"scopesArray": {
+				"type": "Array"
+			},
+			"storageAccountId": {
+				"type": "String",
+				"defaultValue": "/subscriptions/38482de8-520d-482d-b905-09bdedcb4ad6/resourceGroups/finopstfhubv08/providers/Microsoft.Storage/storageAccounts/tfhubv089a4170a7"
+			}
+		},
+		"annotations": [],
+		"lastPublishTime": "2025-03-31T12:39:36Z"
+	},
+	"type": "Microsoft.DataFactory/factories/pipelines"
+}

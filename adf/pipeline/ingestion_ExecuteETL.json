@@ -1,0 +1,255 @@
+{
+	"name": "ingestion_ExecuteETL",
+	"properties": {
+		"activities": [
+			{
+				"name": "Wait",
+				"description": "Files may not be available immediately after being created.",
+				"type": "Wait",
+				"dependsOn": [],
+				"userProperties": [],
+				"typeProperties": {
+					"waitTimeInSeconds": 60
+				}
+			},
+			{
+				"name": "Set Container Folder Path",
+				"type": "SetVariable",
+				"dependsOn": [
+					{
+						"activity": "Wait",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "containerFolderPath",
+					"value": {
+						"value": "@join(skip(array(split(pipeline().parameters.folderPath, '/')), 1), '/')",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "Get Existing Parquet Files",
+				"description": "Get the previously ingested files so we can get file paths.",
+				"type": "GetMetadata",
+				"dependsOn": [
+					{
+						"activity": "Set Container Folder Path",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"dataset": {
+						"referenceName": "ingestion_files",
+						"type": "DatasetReference",
+						"parameters": {
+							"folderPath": {
+								"value": "@variables('containerFolderPath')",
+								"type": "Expression"
+							}
+						}
+					},
+					"fieldList": [
+						"childItems"
+					],
+					"storeSettings": {
+						"type": "AzureBlobFSReadSettings",
+						"recursive": true,
+						"enablePartitionDiscovery": false
+					},
+					"formatSettings": {
+						"type": "ParquetReadSettings"
+					}
+				}
+			},
+			{
+				"name": "Filter Out Folders",
+				"description": "Remove any folders or manifest files.",
+				"type": "Filter",
+				"dependsOn": [
+					{
+						"activity": "Get Existing Parquet Files",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@if(contains(activity('Get Existing Parquet Files').output, 'childItems'), activity('Get Existing Parquet Files').output.childItems, json('[]'))",
+						"type": "Expression"
+					},
+					"condition": {
+						"value": "@and(equals(item().type, 'File'), not(contains(toLower(item().name), 'manifest.json')))",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "Set Ingestion Timestamp",
+				"type": "SetVariable",
+				"dependsOn": [
+					{
+						"activity": "Wait",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "timestamp",
+					"value": {
+						"value": "@utcNow()",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "For Each Old File",
+				"description": "Loop thru each of the existing files.",
+				"type": "ForEach",
+				"dependsOn": [
+					{
+						"activity": "Filter Out Folders",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					},
+					{
+						"activity": "Set Ingestion Timestamp",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@activity('Filter Out Folders').output.Value",
+						"type": "Expression"
+					},
+					"batchCount": null,
+					"activities": [
+						{
+							"name": "Execute",
+							"description": "Run the ADX ETL pipeline.",
+							"type": "ExecutePipeline",
+							"dependsOn": [],
+							"policy": {
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"pipeline": {
+									"referenceName": "ingestion_ETL_dataExplorer",
+									"type": "PipelineReference"
+								},
+								"waitOnCompletion": true,
+								"parameters": {
+									"fileName": {
+										"value": "@item().name",
+										"type": "Expression"
+									},
+									"folderPath": {
+										"value": "@variables('containerFolderPath')",
+										"type": "Expression"
+									},
+									"ingestionId": {
+										"value": "@concat(first(array(split(item().name, '__'))), '_', variables('timestamp'))",
+										"type": "Expression"
+									},
+									"originalFileName": {
+										"value": "@last(array(split(item().name, '__')))",
+										"type": "Expression"
+									},
+									"table": {
+										"value": "@concat(first(array(split(variables('containerFolderPath'), '/'))), '_raw')",
+										"type": "Expression"
+									}
+								}
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "If No Files",
+				"description": "If there are no files found, fail the pipeline.",
+				"type": "IfCondition",
+				"dependsOn": [
+					{
+						"activity": "Filter Out Folders",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@equals(length(activity('Filter Out Folders').output.Value), 0)",
+						"type": "Expression"
+					},
+					"ifTrueActivities": [
+						{
+							"name": "Files Not Found",
+							"type": "Fail",
+							"dependsOn": [],
+							"userProperties": [],
+							"typeProperties": {
+								"message": {
+									"value": "@concat('Unable to locate parquet files to ingest from the ', pipeline().parameters.folderPath, ' path. Please confirm the folder path is the full path, including the \"ingestion\" container and not starting with or ending with a slash (\"/\").')",
+									"type": "Expression"
+								},
+								"errorCode": "IngestionFilesNotFound"
+							}
+						}
+					]
+				}
+			}
+		],
+		"concurrency": 1,
+		"parameters": {
+			"folderPath": {
+				"type": "string"
+			}
+		},
+		"variables": {
+			"containerFolderPath": {
+				"type": "string"
+			},
+			"timestamp": {
+				"type": "string"
+			}
+		},
+		"annotations": [
+			"New ingestion"
+		],
+		"lastPublishTime": "2025-03-31T12:39:39Z"
+	},
+	"type": "Microsoft.DataFactory/factories/pipelines"
+}

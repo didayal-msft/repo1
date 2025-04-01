@@ -1,0 +1,286 @@
+{
+	"name": "config_start_backfill_process",
+	"properties": {
+		"activities": [
+			{
+				"name": "Get Config",
+				"type": "Lookup",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "0.00:05:00",
+					"retry": 2,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "JsonSource",
+						"storeSettings": {
+							"type": "AzureBlobFSReadSettings",
+							"recursive": true,
+							"enablePartitionDiscovery": false
+						},
+						"formatSettings": {
+							"type": "JsonReadSettings"
+						}
+					},
+					"dataset": {
+						"referenceName": "config",
+						"type": "DatasetReference",
+						"parameters": {
+							"fileName": {
+								"value": "@variables('fileName')",
+								"type": "Expression"
+							},
+							"folderPath": {
+								"value": "@variables('folderPath')",
+								"type": "Expression"
+							}
+						}
+					}
+				}
+			},
+			{
+				"name": "Set backfill end date",
+				"type": "SetVariable",
+				"dependsOn": [
+					{
+						"activity": "Get Config",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "endDate",
+					"value": {
+						"value": "@addDays(startOfMonth(utcNow()), -1)",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "Set backfill start date",
+				"type": "SetVariable",
+				"dependsOn": [
+					{
+						"activity": "Get Config",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "startDate",
+					"value": {
+						"value": "@subtractFromTime(startOfMonth(utcNow()), activity('Get Config').output.firstRow.retention.ingestion.months, 'Month')",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "Set export start date",
+				"type": "SetVariable",
+				"dependsOn": [
+					{
+						"activity": "Set backfill start date",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "thisMonth",
+					"value": {
+						"value": "@startOfMonth(variables('endDate'))",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "Set export end date",
+				"type": "SetVariable",
+				"dependsOn": [
+					{
+						"activity": "Set export start date",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "nextMonth",
+					"value": {
+						"value": "@startOfMonth(subtractFromTime(variables('thisMonth'), 1, 'Month'))",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "Every Month",
+				"type": "Until",
+				"dependsOn": [
+					{
+						"activity": "Set export end date",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					},
+					{
+						"activity": "Set backfill end date",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@less(variables('thisMonth'), variables('startDate'))",
+						"type": "Expression"
+					},
+					"activities": [
+						{
+							"name": "Update export start date",
+							"type": "SetVariable",
+							"dependsOn": [
+								{
+									"activity": "Backfill data",
+									"dependencyConditions": [
+										"Completed"
+									]
+								}
+							],
+							"policy": {
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"variableName": "thisMonth",
+								"value": {
+									"value": "@variables('nextMonth')",
+									"type": "Expression"
+								}
+							}
+						},
+						{
+							"name": "Update export end date",
+							"type": "SetVariable",
+							"dependsOn": [
+								{
+									"activity": "Update export start date",
+									"dependencyConditions": [
+										"Completed"
+									]
+								}
+							],
+							"policy": {
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"variableName": "nextMonth",
+								"value": {
+									"value": "@subtractFromTime(variables('thisMonth'), 1, 'Month')",
+									"type": "Expression"
+								}
+							}
+						},
+						{
+							"name": "Backfill data",
+							"type": "ExecutePipeline",
+							"dependsOn": [],
+							"policy": {
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"pipeline": {
+									"referenceName": "config_RunBackfillJob",
+									"type": "PipelineReference"
+								},
+								"waitOnCompletion": true,
+								"parameters": {
+									"EndDate": {
+										"value": "@addDays(addToTime(variables('thisMonth'), 1, 'Month'), -1)",
+										"type": "Expression"
+									},
+									"StartDate": {
+										"value": "@variables('thisMonth')",
+										"type": "Expression"
+									}
+								}
+							}
+						}
+					],
+					"timeout": "0.02:00:00"
+				}
+			}
+		],
+		"concurrency": 1,
+		"variables": {
+			"endDate": {
+				"type": "String"
+			},
+			"exportName": {
+				"type": "String"
+			},
+			"fileName": {
+				"type": "String",
+				"defaultValue": "settings.json"
+			},
+			"finOpsHub": {
+				"type": "String",
+				"defaultValue": "tfhubv08"
+			},
+			"folderPath": {
+				"type": "String",
+				"defaultValue": "config"
+			},
+			"nextMonth": {
+				"type": "String"
+			},
+			"resourceManagementUri": {
+				"type": "String",
+				"defaultValue": "https://management.azure.com/"
+			},
+			"startDate": {
+				"type": "String"
+			},
+			"storageAccountId": {
+				"type": "String",
+				"defaultValue": "/subscriptions/38482de8-520d-482d-b905-09bdedcb4ad6/resourceGroups/finopstfhubv08/providers/Microsoft.Storage/storageAccounts/tfhubv089a4170a7"
+			},
+			"thisMonth": {
+				"type": "String"
+			}
+		},
+		"annotations": [],
+		"lastPublishTime": "2025-03-31T12:39:37Z"
+	},
+	"type": "Microsoft.DataFactory/factories/pipelines"
+}

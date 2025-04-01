@@ -1,0 +1,32 @@
+{
+	"name": "msexports",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "tfhubv089a4170a7",
+			"type": "LinkedServiceReference"
+		},
+		"parameters": {
+			"blobPath": {
+				"type": "String"
+			}
+		},
+		"annotations": [],
+		"type": "DelimitedText",
+		"typeProperties": {
+			"location": {
+				"type": "AzureBlobFSLocation",
+				"fileName": {
+					"value": "@{dataset().blobPath}",
+					"type": "Expression"
+				},
+				"fileSystem": "msexports"
+			},
+			"columnDelimiter": ",",
+			"escapeChar": "\"",
+			"firstRowAsHeader": true,
+			"quoteChar": "\""
+		},
+		"schema": []
+	},
+	"type": "Microsoft.DataFactory/factories/datasets"
+}

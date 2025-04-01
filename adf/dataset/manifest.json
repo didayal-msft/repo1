@@ -1,0 +1,36 @@
+{
+	"name": "manifest",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "tfhubv089a4170a7",
+			"type": "LinkedServiceReference"
+		},
+		"parameters": {
+			"fileName": {
+				"type": "String",
+				"defaultValue": "manifest.json"
+			},
+			"folderPath": {
+				"type": "String",
+				"defaultValue": "msexports"
+			}
+		},
+		"annotations": [],
+		"type": "Json",
+		"typeProperties": {
+			"location": {
+				"type": "AzureBlobFSLocation",
+				"fileName": {
+					"value": "@{dataset().fileName}",
+					"type": "Expression"
+				},
+				"folderPath": {
+					"value": "@{dataset().folderPath}",
+					"type": "Expression"
+				}
+			}
+		},
+		"schema": {}
+	},
+	"type": "Microsoft.DataFactory/factories/datasets"
+}

@@ -1,0 +1,29 @@
+{
+	"name": "ingestion",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "tfhubv089a4170a7",
+			"type": "LinkedServiceReference"
+		},
+		"parameters": {
+			"blobPath": {
+				"type": "String"
+			}
+		},
+		"annotations": [],
+		"type": "Parquet",
+		"typeProperties": {
+			"location": {
+				"type": "AzureBlobFSLocation",
+				"fileName": {
+					"value": "@{dataset().blobPath}",
+					"type": "Expression"
+				},
+				"fileSystem": "ingestion"
+			},
+			"compressionCodec": "snappy"
+		},
+		"schema": []
+	},
+	"type": "Microsoft.DataFactory/factories/datasets"
+}

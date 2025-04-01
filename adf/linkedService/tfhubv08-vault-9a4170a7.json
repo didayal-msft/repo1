@@ -1,0 +1,15 @@
+{
+	"name": "tfhubv08-vault-9a4170a7",
+	"type": "Microsoft.DataFactory/factories/linkedservices",
+	"properties": {
+		"annotations": [],
+		"connectVia": {
+			"referenceName": "ManagedIntegrationRuntime",
+			"type": "IntegrationRuntimeReference"
+		},
+		"type": "AzureKeyVault",
+		"typeProperties": {
+			"baseUrl": "https://tfhubv08-vault-9a4170a7.vault.azure.net/"
+		}
+	}
+}

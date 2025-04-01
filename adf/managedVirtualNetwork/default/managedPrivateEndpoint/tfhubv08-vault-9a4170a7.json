@@ -1,0 +1,10 @@
+{
+	"name": "tfhubv08-vault-9a4170a7",
+	"properties": {
+		"privateLinkResourceId": "/subscriptions/38482de8-520d-482d-b905-09bdedcb4ad6/resourceGroups/finopstfhubv08/providers/Microsoft.KeyVault/vaults/tfhubv08-vault-9a4170a7",
+		"groupId": "vault",
+		"fqdns": [
+			"tfhubv08-vault-9a4170a7.vault.azure.net"
+		]
+	}
+}

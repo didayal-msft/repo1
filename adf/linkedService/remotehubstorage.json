@@ -1,0 +1,19 @@
+{
+	"name": "remotehubstorage",
+	"type": "Microsoft.DataFactory/factories/linkedservices",
+	"properties": {
+		"accountKey": {
+			"secretName": "tfhubv08-storage-key",
+			"store": {
+				"referenceName": "tfhubv08-vault-9a4170a7",
+				"type": "LinkedServiceReference"
+			},
+			"type": "AzureKeyVaultSecret"
+		},
+		"annotations": [],
+		"type": "AzureBlobFS",
+		"typeProperties": {
+			"url": null
+		}
+	}
+}

@@ -1,0 +1,14 @@
+{
+	"name": "tfhubv08-engine-9a4170a7",
+	"properties": {
+		"globalConfigurations": {
+			"PipelineBillingEnabled": "true"
+		}
+	},
+	"location": "centralindia",
+	"identity": {
+		"type": "SystemAssigned",
+		"principalId": "774918c4-1212-4b28-a7c1-12a6697fffe1",
+		"tenantId": "4ef5c800-a1de-451a-9bf2-017f7723e576"
+	}
+}

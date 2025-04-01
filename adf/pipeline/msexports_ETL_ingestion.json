@@ -1,0 +1,184 @@
+{
+	"name": "msexports_ETL_ingestion",
+	"properties": {
+		"activities": [
+			{
+				"name": "Get Existing Parquet Files",
+				"description": "Get the previously ingested files so we can remove any older data. This is necessary to avoid data duplication in reports.",
+				"type": "GetMetadata",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"dataset": {
+						"referenceName": "ingestion_files",
+						"type": "DatasetReference",
+						"parameters": {
+							"folderPath": {
+								"value": "@pipeline().parameters.destinationFolder",
+								"type": "Expression"
+							}
+						}
+					},
+					"fieldList": [
+						"childItems"
+					],
+					"storeSettings": {
+						"type": "AzureBlobFSReadSettings",
+						"recursive": true,
+						"enablePartitionDiscovery": false
+					},
+					"formatSettings": {
+						"type": "ParquetReadSettings"
+					}
+				}
+			},
+			{
+				"name": "Filter Out Current Exports",
+				"description": "Remove existing files from the current export so those files do not get deleted.",
+				"type": "Filter",
+				"dependsOn": [
+					{
+						"activity": "Get Existing Parquet Files",
+						"dependencyConditions": [
+							"Completed"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@if(contains(activity('Get Existing Parquet Files').output, 'childItems'), activity('Get Existing Parquet Files').output.childItems, json('[]'))",
+						"type": "Expression"
+					},
+					"condition": {
+						"value": "@and(endswith(item().name, '.parquet'), not(startswith(item().name, concat(pipeline().parameters.ingestionId, '__'))))",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "Load Schema Mappings",
+				"description": "Get schema mapping file to use for the CSV to parquet conversion.",
+				"type": "Lookup",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "JsonSource",
+						"storeSettings": {
+							"type": "AzureBlobFSReadSettings",
+							"recursive": true,
+							"enablePartitionDiscovery": false
+						},
+						"formatSettings": {
+							"type": "JsonReadSettings"
+						}
+					},
+					"dataset": {
+						"referenceName": "config",
+						"type": "DatasetReference",
+						"parameters": {
+							"fileName": {
+								"value": "@toLower(pipeline().parameters.schemaFile)",
+								"type": "Expression"
+							},
+							"folderPath": "config/schemas"
+						}
+					}
+				}
+			},
+			{
+				"name": "Failed to Load Schema",
+				"type": "Fail",
+				"dependsOn": [
+					{
+						"activity": "Load Schema Mappings",
+						"dependencyConditions": [
+							"Failed"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"message": {
+						"value": "@concat('Unable to load the ', pipeline().parameters.schemaFile, ' schema file. Please confirm the schema and version are supported for FinOps hubs ingestion. Unsupported files will remain in the msexports container.')",
+						"type": "Expression"
+					},
+					"errorCode": "SchemaLoadFailed"
+				}
+			},
+			{
+				"name": "Set Additional Columns",
+				"type": "SetVariable",
+				"dependsOn": [
+					{
+						"activity": "Load Schema Mappings",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "additionalColumns",
+					"value": {
+						"value": "@intersection(array(json(concat('[{\"name\":\"x_SourceProvider\",\"value\":\"Microsoft\"},{\"name\":\"x_SourceName\",\"value\":\"Cost Management\"},{\"name\":\"x_SourceType\",\"value\":\"', pipeline().parameters.exportDatasetVersion, '\"},{\"name\":\"x_SourceVersion\",\"value\":\"', pipeline().parameters.exportDatasetVersion, '\"}]'))), activity('Load Schema Mappings').output.firstRow.additionalColumns)",
+						"type": "Expression"
+					}
+				}
+			}
+		],
+		"parameters": {
+			"blobPath": {
+				"type": "String"
+			},
+			"destinationFile": {
+				"type": "string"
+			},
+			"destinationFolder": {
+				"type": "string"
+			},
+			"exportDatasetType": {
+				"type": "string"
+			},
+			"exportDatasetVersion": {
+				"type": "string"
+			},
+			"ingestionId": {
+				"type": "string"
+			},
+			"schemaFile": {
+				"type": "string"
+			}
+		},
+		"variables": {
+			"additionalColumns": {
+				"type": "Array"
+			},
+			"destinationPath": {
+				"type": "String"
+			}
+		},
+		"annotations": [],
+		"lastPublishTime": "2025-03-31T12:39:38Z"
+	},
+	"type": "Microsoft.DataFactory/factories/pipelines"
+}

@@ -1,0 +1,35 @@
+{
+	"name": "ftkReleaseFile",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "ftkRepo",
+			"type": "LinkedServiceReference"
+		},
+		"parameters": {
+			"fileName": {
+				"type": "string"
+			},
+			"version": {
+				"type": "string",
+				"defaultValue": "latest"
+			}
+		},
+		"annotations": [],
+		"type": "DelimitedText",
+		"typeProperties": {
+			"location": {
+				"type": "HttpServerLocation",
+				"relativeUrl": {
+					"value": "@concat('releases/download/v', dataset().version, '/', dataset().fileName)",
+					"type": "Expression"
+				}
+			},
+			"columnDelimiter": ",",
+			"escapeChar": "\\",
+			"firstRowAsHeader": true,
+			"quoteChar": "\""
+		},
+		"schema": []
+	},
+	"type": "Microsoft.DataFactory/factories/datasets"
+}

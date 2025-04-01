@@ -1,0 +1,15 @@
+{
+	"name": "tfhubv089a4170a7",
+	"type": "Microsoft.DataFactory/factories/linkedservices",
+	"properties": {
+		"annotations": [],
+		"connectVia": {
+			"referenceName": "ManagedIntegrationRuntime",
+			"type": "IntegrationRuntimeReference"
+		},
+		"type": "AzureBlobFS",
+		"typeProperties": {
+			"url": "tfhubv089a4170a7.blob.core.windows.net"
+		}
+	}
+}
